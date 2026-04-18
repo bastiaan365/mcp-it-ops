@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+build/
+dist/
+.venv/
+venv/
+
+# Test artifacts
+.pytest_cache/
+.coverage
+htmlcov/
+
+# IDE
+.vscode/
+.idea/
+
+# Project-specific
+config/settings.yaml          # local overrides; only settings.example.yaml is committed
+.env
+.env.*
+
+# Claude Code per-host overrides
+.claude/settings.local.json

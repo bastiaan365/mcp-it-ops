@@ -1,0 +1,18 @@
+# Example mcp-it-ops config. Copy to settings.yaml and customise.
+# Secrets come from environment variables; only references go in this file.
+
+grafana:
+  url: http://localhost:3000
+  user: admin
+  password_env: GRAFANA_PASSWORD       # name of the env var that holds the password
+
+freqtrade:
+  bots:
+    steady:
+      url: http://localhost:8090
+      user_env: FT_STEADY_USER
+      pass_env: FT_STEADY_PASS
+    fun:
+      url: http://localhost:8091
+      user_env: FT_FUN_USER
+      pass_env: FT_FUN_PASS
