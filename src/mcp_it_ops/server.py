@@ -48,6 +48,9 @@ def load_config() -> dict[str, Any]:
                 "fun":    {"url": "http://localhost:8091", "user_env": "FT_FUN_USER",    "pass_env": "FT_FUN_PASS"},
             },
         },
+        "loki": {
+            "url": os.environ.get("LOKI_URL", "http://localhost:3100"),
+        },
     }
 
     path = DEFAULT_CONFIG_PATH
@@ -256,6 +259,98 @@ def get_freqtrade_bot_status(bot_name: str) -> dict[str, Any]:
         "total_p_and_l_pct": profit_d.get("profit_all_percent"),
         "win_rate": profit_d.get("winrate"),
         "open_positions": open_positions,
+    }
+
+
+@mcp.tool()
+def get_container_status() -> dict[str, Any]:
+    """Return structured docker-ps output: per-container name, image, state, status, ports, age.
+
+    Shells out to docker ps with a tab-separated format string. Returns a list of containers
+    plus a summary dict. Read-only — does not stop/restart anything.
+
+    Returns {"error": "..."} if docker isn't installed or the docker socket is unreachable.
+    """
+    if not shutil.which("docker"):
+        return {"error": "docker binary not found in PATH"}
+
+    fmt = "{{.Names}}\t{{.Image}}\t{{.State}}\t{{.Status}}\t{{.Ports}}\t{{.RunningFor}}"
+    try:
+        out = subprocess.run(
+            ["docker", "ps", "-a", "--format", fmt],
+            capture_output=True, text=True, timeout=10, check=True,
+        ).stdout
+    except subprocess.SubprocessError as e:
+        return {"error": f"docker ps failed: {e}"}
+
+    containers = []
+    for line in out.strip().splitlines():
+        if not line:
+            continue
+        parts = line.split("\t")
+        if len(parts) < 6:
+            continue
+        name, image, state, status, ports, age = parts[:6]
+        containers.append({
+            "name": name,
+            "image": image,
+            "state": state,
+            "status": status,
+            "ports": ports if ports else None,
+            "age": age,
+        })
+
+    summary = {
+        "total": len(containers),
+        "running": sum(1 for c in containers if c["state"] == "running"),
+        "exited":  sum(1 for c in containers if c["state"] == "exited"),
+        "other":   sum(1 for c in containers if c["state"] not in ("running", "exited")),
+    }
+    return {"summary": summary, "containers": containers}
+
+
+@mcp.tool()
+def query_loki_logs(query: str, since: str = "1h", limit: int = 100) -> dict[str, Any]:
+    """Search container/syslog logs via Loki LogQL.
+
+    query: LogQL query string, e.g. '{container="grafana"}' or '{container=~".+"} |= "ERROR"'
+    since: how far back, e.g. '1h', '30m', '7d' (Loki duration syntax)
+    limit: max log lines to return (Loki default = 100, hard-capped here at 1000)
+
+    Returns a dict with: total_streams, total_lines, streams (list of {labels, lines}).
+    Lines are timestamp-sorted oldest-first. Returns {"error": "..."} on Loki unreachable
+    or invalid query.
+    """
+    cfg = CONFIG.get("loki", {})
+    url = cfg.get("url", "http://localhost:3100").rstrip("/")
+    limit = min(max(1, limit), 1000)
+
+    try:
+        resp = httpx.get(
+            f"{url}/loki/api/v1/query_range",
+            params={"query": query, "since": since, "limit": str(limit), "direction": "forward"},
+            timeout=15,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        return {"error": f"Loki query failed: {e}"}
+
+    data = resp.json().get("data", {})
+    streams = []
+    total_lines = 0
+    for item in data.get("result", []):
+        labels = item.get("stream", {})
+        values = item.get("values", [])  # [[ts_ns, line], ...]
+        lines = [{"timestamp_ns": v[0], "line": v[1]} for v in values]
+        streams.append({"labels": labels, "lines": lines, "line_count": len(lines)})
+        total_lines += len(lines)
+
+    return {
+        "query": query,
+        "since": since,
+        "total_streams": len(streams),
+        "total_lines": total_lines,
+        "streams": streams,
     }
 
 
