@@ -17,16 +17,22 @@ This file scopes Claude's behaviour for this repo. The global `~/.claude/CLAUDE.
 ```
 src/mcp_it_ops/
 ├── __init__.py
-└── server.py            # FastMCP server + tool definitions (everything is here for v0.0.1)
+├── config.py            # YAML + env-var config loading; CONFIG dict
+├── server.py            # FastMCP setup + main(); imports tools and registers them
+└── tools/
+    ├── __init__.py
+    ├── host.py          # local-host ops: system, smartd, containers, backup
+    ├── observability.py # grafana_alerts, loki_logs, influxdb_flux
+    └── freqtrade.py     # freqtrade bot REST API
 tests/                   # pytest tests; one test file per tool
 config/
 ├── settings.example.yaml   # committed template
 └── settings.yaml           # gitignored — local overrides
 pyproject.toml           # PEP 621, requires Python 3.10+
-.github/workflows/       # CI (TODO post-v0.0.1)
+.github/workflows/ci.yml # matrix CI on Python 3.10/3.11/3.12
 ```
 
-When the tool count grows past ~5-6, refactor `server.py` into `tools/<category>.py` modules, importing them in `server.py` for registration. Keep one tool per module-level function with a clear docstring.
+Tools are plain functions returning dicts (no MCP coupling). `server.py` registers them via `mcp.tool()(fn)`. New categories: add a new `tools/<category>.py` module and a corresponding import + registration in `server.py`. Keep one tool per module-level function with a clear docstring.
 
 ### Python style
 
@@ -117,7 +123,7 @@ When I ask you to **expose a new external service** (HA Prometheus endpoint, OPN
 
 _Claude maintains this section. List anything in the repo that doesn't match the conventions above, with why it's still there and what would need to happen to fix it._
 
-- **No CI workflow yet** — `.github/workflows/` exists but is empty. v0.0.2 priority.
-- **No tests yet** — `tests/__init__.py` is empty. v0.0.2 priority. Currently relying on the manual sanity-load step from the validation gates above.
 - **Stdio transport only** — HTTP transport would let openclaw and other tailnet peers query niborserver-resident MCP tools. v0.1+.
-- **Two tools, not eighteen** — the original README aspirationally listed 18 tools across AD/Intune/M365/network/system. v0.0.1 ships only the homelab-relevant subset that's testable on niborserver. Enterprise tools (AD/Intune/M365) wait until there's a corporate test environment.
+- **Homelab-only subset** — the original README aspirationally listed 18 tools across AD/Intune/M365/network/system. Currently 8 tools, all homelab-resident and testable on niborserver. Enterprise tools (AD/Intune/M365) wait until there's a corporate test environment.
+- _(Resolved at v0.0.2: CI workflow added, pytest tests added.)_
+- _(Resolved at v0.0.5: server.py refactored into tools/ modules per the threshold rule.)_

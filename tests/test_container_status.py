@@ -12,7 +12,7 @@ from mcp_it_ops.server import get_container_status
 @pytest.fixture
 def mock_docker(monkeypatch):
     """docker binary present + a synthetic docker-ps output."""
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/bin/docker" if cmd == "docker" else None)
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/bin/docker" if cmd == "docker" else None)
 
     sample_output = (
         "grafana\tgrafana/grafana:latest\trunning\tUp 3 hours\t0.0.0.0:3000->3000/tcp\t3 hours ago\n"
@@ -20,7 +20,7 @@ def mock_docker(monkeypatch):
         "loki\tgrafana/loki:2.9.10\trunning\tUp 1 day (healthy)\t0.0.0.0:3100->3100/tcp\t1 day ago\n"
     )
     monkeypatch.setattr(
-        "mcp_it_ops.server.subprocess.run",
+        "mcp_it_ops.tools.host.subprocess.run",
         lambda *a, **k: MagicMock(stdout=sample_output),
     )
 
@@ -37,7 +37,7 @@ def test_container_status_happy_path(mock_docker):
 
 
 def test_container_status_no_docker(monkeypatch):
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: None)
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: None)
     result = get_container_status()
     assert "error" in result
     assert "docker binary not found" in result["error"]
@@ -46,12 +46,12 @@ def test_container_status_no_docker(monkeypatch):
 def test_container_status_docker_failure(monkeypatch):
     """Docker installed but daemon unreachable → error response."""
     import subprocess
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/bin/docker")
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/bin/docker")
 
     def fake_run(*a, **k):
         raise subprocess.CalledProcessError(1, "docker ps")
 
-    monkeypatch.setattr("mcp_it_ops.server.subprocess.run", fake_run)
+    monkeypatch.setattr("mcp_it_ops.tools.host.subprocess.run", fake_run)
     result = get_container_status()
     assert "error" in result
     assert "docker ps failed" in result["error"]

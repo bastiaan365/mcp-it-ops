@@ -30,9 +30,9 @@ Media and Data Integrity Errors:    0
 
 
 def test_smartd_health_happy_path(monkeypatch):
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/sbin/smartctl")
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/sbin/smartctl")
     monkeypatch.setattr(
-        "mcp_it_ops.server.subprocess.run",
+        "mcp_it_ops.tools.host.subprocess.run",
         lambda *a, **k: MagicMock(stdout=SAMPLE_SMARTCTL_NVME, stderr=""),
     )
     result = get_smartd_health("/dev/nvme0n1")
@@ -48,16 +48,16 @@ def test_smartd_health_happy_path(monkeypatch):
 
 
 def test_smartd_health_no_smartctl(monkeypatch):
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: None)
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: None)
     result = get_smartd_health()
     assert "error" in result
     assert "smartctl not installed" in result["error"]
 
 
 def test_smartd_health_sudo_denied(monkeypatch):
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/sbin/smartctl")
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/sbin/smartctl")
     monkeypatch.setattr(
-        "mcp_it_ops.server.subprocess.run",
+        "mcp_it_ops.tools.host.subprocess.run",
         lambda *a, **k: MagicMock(stdout="", stderr="sudo: a password is required"),
     )
     result = get_smartd_health()
@@ -66,12 +66,12 @@ def test_smartd_health_sudo_denied(monkeypatch):
 
 
 def test_smartd_health_subprocess_failure(monkeypatch):
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/sbin/smartctl")
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/sbin/smartctl")
 
     def fake_run(*a, **k):
         raise subprocess.SubprocessError("simulated failure")
 
-    monkeypatch.setattr("mcp_it_ops.server.subprocess.run", fake_run)
+    monkeypatch.setattr("mcp_it_ops.tools.host.subprocess.run", fake_run)
     result = get_smartd_health()
     assert "error" in result
     assert "smartctl failed" in result["error"]
@@ -79,10 +79,10 @@ def test_smartd_health_subprocess_failure(monkeypatch):
 
 def test_smartd_health_partial_output(monkeypatch):
     """Some smartctl output formats may omit some fields → those become None, not crash."""
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/sbin/smartctl")
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/sbin/smartctl")
     minimal = "SMART overall-health self-assessment test result: PASSED\nTemperature: 25 Celsius\n"
     monkeypatch.setattr(
-        "mcp_it_ops.server.subprocess.run",
+        "mcp_it_ops.tools.host.subprocess.run",
         lambda *a, **k: MagicMock(stdout=minimal, stderr=""),
     )
     result = get_smartd_health()

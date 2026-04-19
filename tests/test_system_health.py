@@ -38,7 +38,7 @@ def mock_system(monkeypatch):
 
     monkeypatch.setattr("builtins.open", fake_open)
     monkeypatch.setattr(
-        "mcp_it_ops.server.Path",
+        "mcp_it_ops.tools.host.Path",
         lambda p: MagicMock(read_text=lambda: "test-host" if str(p) == "/etc/hostname" else None),
     )
 
@@ -52,8 +52,8 @@ def mock_system(monkeypatch):
             return docker_result
         raise ValueError(f"unexpected subprocess call: {args}")
 
-    monkeypatch.setattr("mcp_it_ops.server.subprocess.run", fake_subprocess_run)
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: "/usr/bin/docker" if cmd == "docker" else None)
+    monkeypatch.setattr("mcp_it_ops.tools.host.subprocess.run", fake_subprocess_run)
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: "/usr/bin/docker" if cmd == "docker" else None)
 
 
 def test_get_system_health_happy_path(mock_system):
@@ -80,7 +80,7 @@ def test_get_system_health_returns_all_expected_keys(mock_system):
 
 def test_get_system_health_handles_missing_docker(monkeypatch, mock_system):
     """If docker isn't installed, container_count_running is None — no crash."""
-    monkeypatch.setattr("mcp_it_ops.server.shutil.which", lambda cmd: None)
+    monkeypatch.setattr("mcp_it_ops.tools.host.shutil.which", lambda cmd: None)
     result = get_system_health()
     assert result["container_count_running"] is None
     assert result["disk_root_used_pct"] == 5
@@ -95,7 +95,7 @@ def test_get_system_health_handles_subprocess_error(monkeypatch, mock_system):
             raise subprocess.SubprocessError("simulated df failure")
         return MagicMock(stdout="abc\n")
 
-    monkeypatch.setattr("mcp_it_ops.server.subprocess.run", fake_run)
+    monkeypatch.setattr("mcp_it_ops.tools.host.subprocess.run", fake_run)
     result = get_system_health()
     assert result["disk_root_used_pct"] is None
     # Other fields still populate from /proc reads
