@@ -2,7 +2,7 @@
 
 MCP server that exposes homelab and IT-ops tools to Claude. Designed to grow tool-by-tool, starting with what's actually testable on a Linux homelab and extending toward AD / Intune / M365 when a corporate test environment is available.
 
-> **Status: v0.0.4 (2026-04-18)** — 7 working tools, 30 pytest tests, CI green on Python 3.10/3.11/3.12. Locally tested on niborserver. Not yet on PyPI; install from source.
+> **Status: v0.0.5 (2026-04-19)** — 8 working tools, 37 pytest tests, CI green on Python 3.10/3.11/3.12. Tools split into category modules under `tools/`. Locally tested on niborserver. Not yet on PyPI; install from source.
 
 ## What it does today
 
@@ -17,10 +17,10 @@ Once installed and connected to Claude (Desktop or Code), Claude can call:
 | `query_loki_logs(query, since, limit)` | Loki LogQL `query_range` against `localhost:3100`. Returns structured streams + lines, limit clamped to 1000. |
 | `get_smartd_health(device='/dev/nvme0n1')` | NVMe/SATA SMART health via `sudo smartctl -a` — overall health, critical warning, temperature, available spare, percentage used, power-on hours, unsafe shutdowns, media errors. |
 | `get_backup_status` | Reads `/var/log/niborserver-backup.log` and reports last_run_started/completed/duration/size/succeeded. Closes the "watch the watchers" loop. |
+| `query_influxdb_flux(flux, bucket)` | Executes a Flux query against the local InfluxDB v2 and returns parsed CSV records (capped at 500 rows). Auth via `INFLUXDB_TOKEN` + `INFLUXDB_ORG` env vars. |
 
 ## Roadmap
 
-- `query_influxdb_flux(query, bucket)` — execute Flux queries against the local InfluxDB
 - `get_uptime_kuma_status` — pull monitor states via Uptime Kuma API
 - HTTP transport so openclaw / other tailnet peers can query niborserver-resident tools (currently stdio only)
 - _Eventually_: `get_ad_user`, `get_intune_compliance`, `get_m365_service_health` — when a corporate test environment is available

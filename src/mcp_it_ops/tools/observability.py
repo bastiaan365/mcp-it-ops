@@ -106,3 +106,83 @@ def query_loki_logs(query: str, since: str = "1h", limit: int = 100) -> dict[str
         "total_lines": total_lines,
         "streams": streams,
     }
+
+
+def query_influxdb_flux(flux: str, bucket: str = "monitoring") -> dict[str, Any]:
+    """Execute a Flux query against the local InfluxDB and return parsed records.
+
+    flux: Flux query string. The bucket is NOT auto-substituted — include
+        `from(bucket:"<bucket>") |> range(start: -1h) |> ...` yourself.
+    bucket: name surfaced in the response for context (does not modify the query).
+
+    Reads InfluxDB URL from config (`influxdb.url`, default localhost:8086) and the
+    org + token from the env vars named in `influxdb.org_env` / `influxdb.token_env`
+    (default `INFLUXDB_ORG` / `INFLUXDB_TOKEN`).
+
+    Returns: {bucket, row_count, columns, records (list of dicts), truncated_at}.
+    Records are capped at 500 rows to keep Claude's context manageable; if more
+    were returned, `truncated_at: 500` appears in the response.
+
+    Returns {"error": "..."} on missing token, network failure, or Flux syntax error.
+    """
+    cfg = CONFIG.get("influxdb", {})
+    url = cfg.get("url", "http://localhost:8086").rstrip("/")
+    org = os.environ.get(cfg.get("org_env", "INFLUXDB_ORG"))
+    token = os.environ.get(cfg.get("token_env", "INFLUXDB_TOKEN"))
+
+    if not token:
+        return {"error": f"InfluxDB token env var '{cfg.get('token_env', 'INFLUXDB_TOKEN')}' not set"}
+    if not org:
+        return {"error": f"InfluxDB org env var '{cfg.get('org_env', 'INFLUXDB_ORG')}' not set"}
+
+    try:
+        resp = httpx.post(
+            f"{url}/api/v2/query",
+            params={"org": org},
+            headers={
+                "Authorization": f"Token {token}",
+                "Content-Type": "application/vnd.flux",
+                "Accept": "application/csv",
+            },
+            content=flux,
+            timeout=30,
+        )
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        return {"error": f"InfluxDB query failed: {e}"}
+
+    import csv
+    import io
+
+    text = resp.text or ""
+    reader = csv.reader(io.StringIO(text))
+    rows = [r for r in reader if r and not all(c == "" for c in r)]
+
+    if not rows:
+        return {"bucket": bucket, "row_count": 0, "columns": [], "records": []}
+
+    header_idx = 0
+    for i, row in enumerate(rows):
+        if row and row[0] == "" and len(row) > 1 and row[1] == "result":
+            header_idx = i
+            break
+    header = rows[header_idx]
+    data_rows = rows[header_idx + 1 :]
+
+    cap = 500
+    truncated = len(data_rows) > cap
+    columns = [c for c in header if c]
+    records = [
+        {k: v for k, v in zip(header, r) if k}
+        for r in data_rows[:cap]
+    ]
+
+    out: dict[str, Any] = {
+        "bucket": bucket,
+        "row_count": len(records),
+        "columns": columns,
+        "records": records,
+    }
+    if truncated:
+        out["truncated_at"] = cap
+    return out

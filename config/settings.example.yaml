@@ -16,3 +16,11 @@ freqtrade:
       url: http://localhost:8091
       user_env: FT_FUN_USER
       pass_env: FT_FUN_PASS
+
+loki:
+  url: http://localhost:3100
+
+influxdb:
+  url: http://localhost:8086
+  org_env: INFLUXDB_ORG        # name of env var holding the org
+  token_env: INFLUXDB_TOKEN    # name of env var holding the API token

@@ -20,7 +20,11 @@ from .tools.host import (
     get_smartd_health,
     get_system_health,
 )
-from .tools.observability import get_grafana_alert_state, query_loki_logs
+from .tools.observability import (
+    get_grafana_alert_state,
+    query_influxdb_flux,
+    query_loki_logs,
+)
 
 mcp = FastMCP("mcp-it-ops")
 
@@ -31,6 +35,7 @@ mcp.tool()(get_container_status)
 mcp.tool()(query_loki_logs)
 mcp.tool()(get_smartd_health)
 mcp.tool()(get_backup_status)
+mcp.tool()(query_influxdb_flux)
 
 
 def main() -> None:
