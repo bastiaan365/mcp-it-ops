@@ -354,6 +354,125 @@ def query_loki_logs(query: str, since: str = "1h", limit: int = 100) -> dict[str
     }
 
 
+@mcp.tool()
+def get_smartd_health(device: str = "/dev/nvme0n1") -> dict[str, Any]:
+    """Query SMART health for a storage device via smartctl.
+
+    device: /dev/nvme0n1, /dev/sda, etc. Default is niborserver's NVMe.
+    Returns: overall_health, critical_warning, temperature_c, available_spare_pct,
+    percentage_used_pct, power_on_hours, unsafe_shutdowns, media_errors.
+
+    Requires sudo (smartctl needs raw device access). Returns {"error": ...} if
+    smartctl isn't installed or sudo isn't permitted (the calling user must
+    have NOPASSWD sudo for smartctl OR the MCP server must run as root).
+    """
+    if not shutil.which("smartctl"):
+        return {"error": "smartctl not installed"}
+
+    try:
+        out = subprocess.run(
+            ["sudo", "-n", "smartctl", "-a", device],
+            capture_output=True, text=True, timeout=15,
+        )
+    except subprocess.SubprocessError as e:
+        return {"error": f"smartctl failed: {e}"}
+
+    text = out.stdout
+    if not text.strip():
+        return {"error": f"smartctl produced no output (sudo denied? need NOPASSWD or run as root): {out.stderr.strip() or 'no stderr'}"}
+
+    def grab(pattern: str, cast=str) -> Any:
+        import re
+        m = re.search(pattern, text, re.MULTILINE)
+        if not m:
+            return None
+        try:
+            return cast(m.group(1).replace(",", "").strip())
+        except (ValueError, AttributeError):
+            return None
+
+    return {
+        "device": device,
+        "overall_health": grab(r"SMART overall-health self-assessment test result:\s+(\S+)"),
+        "critical_warning": grab(r"Critical Warning:\s+(\S+)"),
+        "temperature_c": grab(r"Temperature:\s+(\d+)", int),
+        "available_spare_pct": grab(r"Available Spare:\s+(\d+)%", int),
+        "percentage_used_pct": grab(r"Percentage Used:\s+(\d+)%", int),
+        "power_on_hours": grab(r"Power On Hours:\s+([\d,]+)", int),
+        "unsafe_shutdowns": grab(r"Unsafe Shutdowns:\s+([\d,]+)", int),
+        "media_errors": grab(r"Media and Data Integrity Errors:\s+(\d+)", int),
+    }
+
+
+@mcp.tool()
+def get_backup_status() -> dict[str, Any]:
+    """Report on the niborserver backup pipeline's last run.
+
+    Reads /var/log/niborserver-backup.log and reports: last_run_started,
+    last_run_completed, last_run_duration_seconds, last_run_size, last_run_succeeded,
+    snapshots_on_destination (count of YYYY-MM-DD dirs visible to local checks).
+
+    Returns {"error": ...} if the log doesn't exist (backup not yet run).
+    """
+    log_path = "/var/log/niborserver-backup.log"
+    if not Path(log_path).exists():
+        return {"error": f"backup log not found at {log_path} — backup may not have run yet"}
+
+    try:
+        with open(log_path) as f:
+            lines = f.readlines()
+    except OSError as e:
+        return {"error": f"could not read backup log: {e}"}
+
+    if not lines:
+        return {"error": "backup log is empty"}
+
+    started_line = None
+    completed_line = None
+    size = None
+    succeeded = False
+
+    for line in reversed(lines):
+        if completed_line is None and ("complete" in line or "FAIL" in line):
+            completed_line = line.strip()
+            succeeded = "complete" in line and "FAIL" not in line
+            import re
+            m = re.search(r"complete.*?\u2014\s*(\S+)", line)
+            if m:
+                size = m.group(1)
+        if started_line is None and "starting" in line:
+            started_line = line.strip()
+        if started_line and completed_line:
+            break
+
+    def parse_ts(line: str | None) -> str | None:
+        if not line:
+            return None
+        import re
+        m = re.match(r"\[(\d{2}:\d{2}:\d{2})\]", line)
+        return m.group(1) if m else None
+
+    duration_seconds = None
+    if started_line and completed_line:
+        from datetime import datetime
+        try:
+            t1 = datetime.strptime(parse_ts(started_line), "%H:%M:%S")
+            t2 = datetime.strptime(parse_ts(completed_line), "%H:%M:%S")
+            duration_seconds = int((t2 - t1).total_seconds())
+        except (ValueError, TypeError):
+            pass
+
+    return {
+        "last_run_started_at": parse_ts(started_line),
+        "last_run_completed_at": parse_ts(completed_line),
+        "last_run_duration_seconds": duration_seconds,
+        "last_run_size": size,
+        "last_run_succeeded": succeeded,
+        "log_path": log_path,
+        "log_total_lines": len(lines),
+    }
+
+
 # ---------------------------------------------------------------------------
 # Entry point
 # ---------------------------------------------------------------------------

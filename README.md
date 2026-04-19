@@ -2,7 +2,7 @@
 
 MCP server that exposes homelab and IT-ops tools to Claude. Designed to grow tool-by-tool, starting with what's actually testable on a Linux homelab and extending toward AD / Intune / M365 when a corporate test environment is available.
 
-> **Status: v0.0.1 (2026-04-19)** — scaffold + 2 working tools, locally tested on niborserver. Not yet on PyPI; install from source. CI + tests are v0.0.2 priorities.
+> **Status: v0.0.4 (2026-04-18)** — 7 working tools, 30 pytest tests, CI green on Python 3.10/3.11/3.12. Locally tested on niborserver. Not yet on PyPI; install from source.
 
 ## What it does today
 
@@ -10,18 +10,19 @@ Once installed and connected to Claude (Desktop or Code), Claude can call:
 
 | Tool | What it does |
 |---|---|
-| `get_system_health` | Returns the local host's hostname, uptime, 1-min load, memory %, root-disk %, and running container count. Reads `/proc` + shells out to `df` and `docker ps`. |
-| `get_grafana_alert_state` | Queries the Grafana Prometheus-style rules API and returns alerts grouped by state (firing / pending / inactive / no_data / error) with name, folder, health, last evaluation, and annotations. |
+| `get_system_health` | Local host's hostname, uptime, 1-min load, memory %, root-disk %, and running container count. Reads `/proc` + shells out to `df` and `docker ps`. |
+| `get_grafana_alert_state` | Queries the Grafana Prometheus-style rules API and returns alerts grouped by state (firing / pending / inactive / no_data / error) with name, folder, health, last evaluation, annotations. |
+| `get_freqtrade_bot_status(bot)` | Profit, win rate, open trade count, balance from a freqtrade REST API. Bot name resolved via config. |
+| `get_container_status` | Full `docker ps` parsed into structured per-container records (name, image, state, health, uptime, ports). |
+| `query_loki_logs(query, since, limit)` | Loki LogQL `query_range` against `localhost:3100`. Returns structured streams + lines, limit clamped to 1000. |
+| `get_smartd_health(device='/dev/nvme0n1')` | NVMe/SATA SMART health via `sudo smartctl -a` — overall health, critical warning, temperature, available spare, percentage used, power-on hours, unsafe shutdowns, media errors. |
+| `get_backup_status` | Reads `/var/log/niborserver-backup.log` and reports last_run_started/completed/duration/size/succeeded. Closes the "watch the watchers" loop. |
 
-Two tools is small on purpose — v0.0.1 proves the protocol works end-to-end. Tools get added one at a time with tests.
+## Roadmap
 
-## Roadmap (next tools, rough order)
-
-- `get_freqtrade_bot_status(bot_name)` — query freqtrade REST API for profit/open trades/win rate
-- `query_loki_logs(query, since='1h')` — search container logs via Loki LogQL
-- `query_influxdb_flux(query, bucket)` — execute Flux queries
-- `get_container_status` — full `docker ps` parsed into structured form
-- `get_smartd_health(device='/dev/nvme0n1')` — NVMe SMART metrics for the host disk
+- `query_influxdb_flux(query, bucket)` — execute Flux queries against the local InfluxDB
+- `get_uptime_kuma_status` — pull monitor states via Uptime Kuma API
+- HTTP transport so openclaw / other tailnet peers can query niborserver-resident tools (currently stdio only)
 - _Eventually_: `get_ad_user`, `get_intune_compliance`, `get_m365_service_health` — when a corporate test environment is available
 
 ## Quickstart

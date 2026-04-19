@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mcp-it-ops"
-version = "0.0.1"
+version = "0.0.4"
 description = "MCP server for IT ops: query system health, Grafana alerts, freqtrade bots, and more from Claude."
 readme = "README.md"
 requires-python = ">=3.10"
